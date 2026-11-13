@@ -8,12 +8,14 @@ import com.pedropathing.math.Pose;
  *
  * <p>An autonomous writes where it finished, and that one has run, in
  * {@code CorbelsOpMode.stopAfter}, and a teleop starts from it, in
- * {@code CorbelsOpMode.initAfter}. A lesson's autonomous writes its alliance,
- * from L140 on. Static
+ * {@code CorbelsOpMode.initAfter}. Until an autonomous has run, a teleop
+ * outside the lessons starts at {@link #defaultStartPose} instead. A lesson's
+ * autonomous writes its alliance, from L140 on. Static
  * because the two are separate OpMode objects: the Driver Station builds a new
  * one each time PLAY is pressed, and only the class outlives that. It survives
- * Stop and Init, and does not survive restarting the Robot Controller app, so
- * the first teleop after a restart uses the default below.
+ * Stop and Init, and does not survive restarting the Robot Controller app or
+ * running Clear Auto Has Run, so the first teleop after either uses the
+ * default below.
  *
  * <h2>Where (0, 0) is</h2>
  *
@@ -49,23 +51,53 @@ public final class OpModeStorage {
     /**
      * Where the last autonomous finished, and so where the next teleop starts.
      * The default is the middle of the near wall, facing up the field, for a
-     * teleop run with no autonomous before it.
+     * lesson's teleop run with no autonomous before it.
      */
-    public static Pose autonomousEndPose = POSES.of(72, botStartYIn, 90);
+    public static Pose autonomousEndPose;
 
     /**
      * Whether an autonomous has finished since the Robot Controller app
      * started, so {@link #autonomousEndPose} is where it ended rather than the
-     * default. A teleop that starts where its own auto starts reads it.
+     * default. {@code CorbelsOpMode.initAfter} reads it, and so does a teleop
+     * that starts where its own auto starts.
      */
-    public static boolean autoHasRun = false;
+    public static boolean autoHasRun;
 
     /**
      * Whether the last autonomous ran for the red alliance, so the next teleop
      * drives from that Alliance Area. True for a teleop run with no autonomous
      * before it.
      */
-    public static boolean isRed = true;
+    public static boolean isRed;
+
+    static {
+        clear();
+    }
+
+    /**
+     * Puts the fields above back as the Robot Controller app starts them, as
+     * if no autonomous had run.
+     */
+    public static void clear() {
+        autonomousEndPose = POSES.of(72, botStartYIn, 90);
+        autoHasRun = false;
+        isRed = true;
+    }
+
+    /**
+     * Where an OpMode outside the lessons starts when nothing else says: against
+     * the alliance's wall, 12 in to the left of its middle as its drivers see
+     * it, facing them, so that driving field relative is the right way round.
+     * Red's pose, turned a half-turn about the field's middle for blue.
+     */
+    public static Pose defaultStartPose(boolean red) {
+        PoseFactory poses = POSES;
+        if (!red) {
+            poses = POSES.rotateAround(72.0, 72.0, 180.0);
+        }
+        Pose defaultStart = poses.of(60.0, botStartYIn, -90.0);
+        return defaultStart;
+    }
 
     private OpModeStorage() {
     }

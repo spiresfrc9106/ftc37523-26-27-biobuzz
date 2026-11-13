@@ -18,6 +18,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.firstinspires.ftc.teamcode.Intake;
 import org.firstinspires.ftc.teamcode.Launcher;
 import org.firstinspires.ftc.teamcode.OpModeStorage;
+import org.firstinspires.ftc.teamcode.base.AutoRoutine;
 import org.firstinspires.ftc.teamcode.base.CorbelsAuto;
 import org.firstinspires.ftc.teamcode.base.CorbelsMecanum;
 import org.firstinspires.ftc.teamcode.base.DriverStationMenu;
@@ -34,10 +35,12 @@ import java.util.function.LongSupplier;
  *
  * <p>Between INIT and PLAY, gamepad 1's D-pad works a menu on the Driver
  * Station: the alliance, and the auto, which is Nothing until another is
- * chosen. The poses are written for the red alliance. For the blue alliance,
- * {@code poses()} turns each one a half-turn about the field's middle, at
- * (72, 72). Left, right, forward and backward are as the audience sees them,
- * from below y = 0 looking toward +y. The field's x and y:
+ * chosen. Each auto's route says where it starts. When a choice changes, the
+ * robot's pose is set to the chosen auto's start, so the flight log shows it
+ * before PLAY. The poses are written for the red alliance. For the blue
+ * alliance, {@code poses()} turns each one a half-turn about the field's
+ * middle, at (72, 72). Left, right, forward and backward are as the audience
+ * sees them, from below y = 0 looking toward +y. The field's x and y:
  * https://coding.stitt.cc/ftc-lessons-java/guide/tasks/e143.html
  *
  * <p>At PLAY the alliance is handed to Example TeleOp, which the Driver
@@ -63,6 +66,7 @@ public class ExampleAuto extends CorbelsAuto {
     MenuItem movShotStrafeIn = new MenuItem("MVSI", "Move Shot Strafe In");
     // LOOKHERE - add new MenuItem for YOUR_NEW_AUTO_HERE here.
     // e.g. MenuItem YOUR_NEW_AUTO_HERE = new MenuItem( "SF", "Shoot Then Forward");
+    MenuItem waitShootPark = new MenuItem("WSP", "WaitShootPark");
     MenuItem SAP = new MenuItem("SAP","Shoot And Park");
     MenuRow autoRow = new MenuRow("Auto");
     OptionMenu optionMenu = new OptionMenu();
@@ -92,6 +96,7 @@ public class ExampleAuto extends CorbelsAuto {
         // LOOKHERE - add MenuItem for YOUR_NEW_AUTO_HERE to autoRow here
         // e.g:
         // autoRow.add(YOUR_NEW_AUTO_HERE);
+        autoRow.add(waitShootPark);
         autoRow.add(SAP);
         optionMenu.add(allianceRow);
         optionMenu.add(autoRow);
@@ -107,12 +112,45 @@ public class ExampleAuto extends CorbelsAuto {
         initAfter(drivetrain);
     }
 
-    /** Again and again between INIT and PLAY: the menu. */
+    /** Again and again between INIT and PLAY: the menu, and the chosen auto when it changes. */
     // 'public' to match the parent class. 'public' allows access from any code.
     @Override
     public void init_loop() {
         menu.loop(gamepad1);
+        if (menu.choiceChanged()) {
+            MenuItem auto = autoRow.getSelected();
+            AutoRoutine chosen = autoRoutineFor(auto);
+            select(chosen);
+        }
         initLoopAfter();
+    }
+
+    /** The route for a menu item: Nothing, the default start doing nothing, unless another. */
+    AutoRoutine autoRoutineFor(MenuItem auto) {
+        boolean isRed = allianceRow.getSelected() == red;
+        Pose defaultStart = OpModeStorage.defaultStartPose(isRed);
+        AutoRoutine chosenAuto = new AutoRoutine(defaultStart, Command.NOOP);
+        if (auto == forward24) {
+            chosenAuto = driveForward24();
+        }
+        if (auto == forwardThenStrafe) {
+            chosenAuto = driveForwardThenStrafe();
+        }
+        if (auto == movShotStrafeIn) {
+            chosenAuto = shootThenIntake();
+        }
+        // LOOKHERE - add if (auto == YOUR_NEW_AUTO_HERE)  to assign YOUR_NEW_ROUTINE to chosenAuto
+        // here e.g.:
+        //         if (auto == YOUR_NEW_AUTO_HERE) {
+        //            chosenAuto = YOUR_NEW_ROUTINE();
+        //         }
+        if (auto == SAP) {
+            chosenAuto = shootAndPark();
+        }
+        if (auto == waitShootPark){
+            chosenAuto = waitShootParkCommand();
+        }
+        return chosenAuto;
     }
 
     // 'public' to match the parent class. 'public' allows access from any code.
@@ -124,24 +162,7 @@ public class ExampleAuto extends CorbelsAuto {
 
         MenuItem auto = autoRow.getSelected();
         Tracker.publish("menu/auto", auto.getFullName());
-        Command chosenAuto = Command.NOOP;
-        if (auto == forward24) {
-            chosenAuto = driveForward24();
-        }
-        if (auto == forwardThenStrafe) {
-            chosenAuto = driveForwardThenStrafe();
-        }
-        if (auto == movShotStrafeIn) {
-            chosenAuto = shootThenIntake();
-        }
-        // LOOKHERE - add if (auto == YOUR_NEW_AUTO_HERE)  to assign YOUR_NEW_COMMAND to chosenAuto
-        // here e.g.:
-        //         if (auto == YOUR_NEW_AUTO_HERE) {
-        //            chosenAuto = YOUR_NEW_COMMAND();
-        //         }
-        if (auto == SAP) {
-            chosenAuto = shootAndPark();
-        }
+        Command chosenAuto = selectedAuto.command();
         Scheduler.schedule(chosenAuto);
         startAfter();
     }
@@ -172,46 +193,39 @@ public class ExampleAuto extends CorbelsAuto {
         return chosenPoses;
     }
 
-    /** Set at INIT, and again at PLAY, once the alliance is chosen. */
-    // 'public' to match the parent class. 'public' allows access from any code.
-    @Override
-    public Pose startPose() {
+    /** L125's auto: forward 24 inches from the wall. */
+    AutoRoutine driveForward24() {
         PoseFactory poses = poses();
         Pose start = poses.of(60.0, botStartYIn, -90.0);
-        return start;
-    }
-
-    /** L125's auto: forward 24 inches from the wall. */
-    Command driveForward24() {
-        PoseFactory poses = poses();
-        Pose start = poses.of(72.0, botStartYIn, -90.0);
-        Pose end = poses.of(72.0, botStartYIn + 24.0, -90.0);
+        Pose end = poses.of(60.0, botStartYIn + 24.0, -90.0);
 
         Command forward24 = sequential(follow(follower, line(start, end).constant(start)));
-        return forward24;
+        AutoRoutine forward24Routine = new AutoRoutine(start, forward24);
+        return forward24Routine;
     }
 
-    /** L130's auto: forward to the middle, sideways to the right, then hold there. */
-    Command driveForwardThenStrafe() {
+    /** Forward 24 inches, left 24 inches, then hold there, on its own alliance's side. */
+    AutoRoutine driveForwardThenStrafe() {
         PoseFactory poses = poses();
-        Pose start = poses.of(72.0, botStartYIn, -90.0);
-        Pose corner = poses.of(72.0, 72.0, -90.0);
-        Pose end = poses.of(96.0, 72.0, -90.0);
+        Pose start = poses.of(60.0, botStartYIn, -90.0);
+        Pose corner = poses.of(60.0, botStartYIn + 24.0, -90.0);
+        Pose end = poses.of(36.0, botStartYIn + 24.0, -90.0);
 
         Command driveForwardToTheCorner = follow(follower, line(start, corner).constant(start));
-        Command strafeRightToTheEnd = follow(follower, line(corner, end).constant(start));
+        Command strafeLeftToTheEnd = follow(follower, line(corner, end).constant(start));
         Command holdTheEnd = hold(follower, end);
-        Command forwardThenStrafeRoute = sequential(driveForwardToTheCorner, strafeRightToTheEnd, holdTheEnd);
-        return forwardThenStrafeRoute;
+        Command forwardThenStrafeRoute = sequential(driveForwardToTheCorner, strafeLeftToTheEnd, holdTheEnd);
+        AutoRoutine forwardThenStrafeRoutine = new AutoRoutine(start, forwardThenStrafeRoute);
+        return forwardThenStrafeRoutine;
     }
 
-    // Start: (72, 10.5), against the audience's wall, facing -y, toward the
+    // Start: (60, 10.5), against the audience's wall, facing -y, toward the
     // audience. v is the way the robot faces.
     //
     //        y (in)
     //        ^
     //   16.5 +
-    //   10.5 +                [v]
+    //   10.5 +             [v]
     //        |
     //      0 +-----+-----+-----+-----+-----+-----+--> x (in)
     //        0     24    48    72    96    120   144
@@ -221,27 +235,27 @@ public class ExampleAuto extends CorbelsAuto {
     //
     //        y (in)
     //        ^
-    //   16.5 +                [v]
-    //   10.5 +                ( )
+    //   16.5 +             [v]
+    //   10.5 +             ( )
     //        |
     //      0 +-----+-----+-----+-----+-----+-----+--> x (in)
     //        0     24    48    72    96    120   144
     //
-    // Shoot for 10 s at (72, 16.5), then wait 3 s, holding there.
+    // Shoot for 10 s at (60, 16.5), then wait 3 s, holding there.
     //
     //        y (in)
     //        ^
-    //   16.5 +                [v]
+    //   16.5 +             [v]
     //   10.5 +
     //        |
     //      0 +-----+-----+-----+-----+-----+-----+--> x (in)
     //        0     24    48    72    96    120   144
     //
-    // Left 24 in, to -x, toward the red wall: the robot strafes to its own right.
+    // Left 12 in, to -x, toward the red wall: the robot strafes to its own right.
     //
     //        y (in)
     //        ^
-    //   16.5 +          [v]<<<( )
+    //   16.5 +          [v]( )
     //   10.5 +
     //        |
     //      0 +-----+-----+-----+-----+-----+-----+--> x (in)
@@ -259,13 +273,13 @@ public class ExampleAuto extends CorbelsAuto {
 
     /**
      * Forward 6 inches and hold; shoot for 10 seconds, then stop; wait 3
-     * seconds; strafe 24 inches left and hold; intake for 3 seconds. The robot
+     * seconds; strafe 12 inches left and hold; intake for 3 seconds. The robot
      * faces -y, toward the audience, so it drives backward and strafes to its
      * own right.
      */
-    Command shootThenIntake() {
+    AutoRoutine shootThenIntake() {
         PoseFactory poses = poses();
-        Pose start = startPose();
+        Pose start = poses.of(60.0, botStartYIn, -90.0);
         Pose shootFrom = poses.of(60.0, botStartYIn + 6.0, -90.0);
         Pose intakeAt = poses.of(48.0, botStartYIn + 6.0, -90.0);
 
@@ -278,12 +292,31 @@ public class ExampleAuto extends CorbelsAuto {
         Command runTheIntake = intakeFor(intakeSeconds);
         Command shootThenIntakeRoute = sequential(driveForwardToShoot, holdWhileShooting, shoot,
                 waitAfterShooting, strafeLeftToIntake, holdWhileIntaking, runTheIntake);
-        return shootThenIntakeRoute;
+        AutoRoutine shootThenIntakeRoutine = new AutoRoutine(start, shootThenIntakeRoute);
+        return shootThenIntakeRoutine;
     }
 
-    // LOOKHERE - for your new auto YOUR_NEW_AUTO_HERE define YOUR_NEW_COMMAND here:
+    AutoRoutine waitShootParkCommand() {
+        PoseFactory poses = poses();
+        Pose start = poses.of(60.0, 144.0-botStartYIn, +90.0);
+        Pose firststop = poses.of(60.0, 120.0, +90.0);
+        Pose stopPose = poses.of(18.0,  120.0, +90.0);
+
+        Command wait = waitSeconds(10);
+        Command shoot = shootFor(8);
+
+        Command drivetofirststop = follow(follower, line(start,firststop).constant(start));
+        Command driveToStop = follow(follower, line(firststop, stopPose).constant(start));
+        Command wsp = sequential( wait,shoot,
+                drivetofirststop, driveToStop);
+        AutoRoutine shootAndParkRoutine = new AutoRoutine(start, wsp);
+        return shootAndParkRoutine;
+    }
+
+    // LOOKHERE - for your new auto YOUR_NEW_AUTO_HERE define YOUR_NEW_ROUTINE here, with
+    // its own start:
     // e.g.:
-    //Command YOUR_NEW_COMMAND() {
+    //AutoRoutine YOUR_NEW_ROUTINE() {
     //    PoseFactory poses = poses();
     //    Pose startPose = poses.of(72.0, botStartYIn, -90.0);
     //    Pose stopPose = poses.of(72.0, botStartYIn + 6.0, -90.0);
@@ -294,11 +327,12 @@ public class ExampleAuto extends CorbelsAuto {
     //    Command driveForwardAfterShot = follow(follower, line(startPose, stopPose).constant(startPose));
     //    Command shootThenMoveRoute = sequential(holdWhileShooting, shoot,
     //            waitAfterShooting, driveForwardAfterShot);
-    //    return shootThenMoveRoute;
+    //    AutoRoutine shootThenMoveRoutine = new AutoRoutine(startPose, shootThenMoveRoute);
+    //    return shootThenMoveRoutine;
     //}
-    Command shootAndPark() {
+    AutoRoutine shootAndPark() {
         PoseFactory poses = poses();
-        Pose startPose = startPose();
+        Pose startPose = poses.of(60.0, botStartYIn, -90.0);
         Pose firststop= poses.of(24,51,-90.0);
         Pose stopPose = poses.of(18,  96, -90.0);
 
@@ -308,7 +342,8 @@ public class ExampleAuto extends CorbelsAuto {
         Command driveToStop = follow(follower, line(firststop, stopPose).constant(startPose));
         Command shootThenMoveRoute = sequential( shoot,
                 waitAfterShooting, drivetofirststop, driveToStop);
-        return shootThenMoveRoute;
+        AutoRoutine shootAndParkRoutine = new AutoRoutine(startPose, shootThenMoveRoute);
+        return shootAndParkRoutine;
     }
 
 

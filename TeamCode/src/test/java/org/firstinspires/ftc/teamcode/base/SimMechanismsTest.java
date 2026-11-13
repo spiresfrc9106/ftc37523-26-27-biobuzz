@@ -7,9 +7,11 @@ import com.pedropathing.ivy.Scheduler;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.firstinspires.ftc.teamcode.Bot88888Auto;
+import org.firstinspires.ftc.teamcode.OpModeStorage;
 import org.firstinspires.ftc.teamcode.StarterBotTeleOp;
 import org.firstinspires.ftc.teamcode.example.ExampleAuto;
 import org.firstinspires.ftc.teamcode.example.ExampleTeleOp;
+import org.firstinspires.ftc.teamcode.pedro.Constants;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,6 +31,7 @@ public class SimMechanismsTest {
 
     @Before
     public void setUp() throws IllegalAccessException {
+        OpModeStorage.clear();
         Scheduler.reset();
         for (Class<?> taker : TAKERS) {
             for (Field field : taker.getDeclaredFields()) {
@@ -68,14 +71,24 @@ public class SimMechanismsTest {
         h.gamepad1.right_bumper = true;
         h.loop();
         h.loop();
-        assertEquals(1250.0, (Double) Tracker.values().get("launcher/target_tps"), 0);
-        assertEquals("the stand-in reports the speed it was given", 1250.0,
+        assertEquals(Constants.launcherTargetTicksPerSecond,
+                (Double) Tracker.values().get("launcher/target_tps"), 0);
+        assertEquals("the stand-in reports the speed it was given",
+                Constants.launcherTargetTicksPerSecond,
                 (Double) Tracker.values().get("launcher/measured_tps"), 0);
         assertEquals("so the windmill feeds", true, Tracker.values().get("launcher/feeding"));
+        assertEquals("the stand-in battery", Constants.NOMINAL_BATTERY_VOLTAGE,
+                (Double) Tracker.values().get("launcher/battery_volts"), 0);
+        assertEquals("the spin-up's F, from that reading", Constants.NOMINAL_BATTERY_VOLTAGE,
+                (Double) Tracker.values().get("launcher/f_battery_volts"), 0);
+        assertTrue(Tracker.values().containsKey("launcher/f_ctrl_units"));
         // The intake's command runs before the launcher's, so it sees the feeding a loop later.
         h.loop();
         assertEquals("and the intake gets its boost", 0.5,
                 (Double) Tracker.values().get("intake/speed"), 1e-9);
+        assertEquals("the stand-in intake motor is given a power, not a velocity", 0.0,
+                (Double) Tracker.values().get("intake/measured_tps"), 0);
+        assertEquals(0.0, (Double) Tracker.values().get("intake/current_amps"), 0);
         h.gamepad1.copy(new Gamepad());
         h.loop();
         assertEquals(0.0, (Double) Tracker.values().get("launcher/target_tps"), 0);

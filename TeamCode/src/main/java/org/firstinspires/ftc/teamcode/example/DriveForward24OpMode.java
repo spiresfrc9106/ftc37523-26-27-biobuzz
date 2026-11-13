@@ -11,6 +11,7 @@ import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
+import org.firstinspires.ftc.teamcode.base.AutoRoutine;
 import org.firstinspires.ftc.teamcode.base.CorbelsAuto;
 import org.firstinspires.ftc.teamcode.base.CorbelsMecanum;
 import org.firstinspires.ftc.teamcode.base.Tracker;
@@ -18,10 +19,6 @@ import org.firstinspires.ftc.teamcode.base.Tracker;
 /**
  * Minimal autonomous: drive 24 inches forward, holding heading. Built with Ivy so
  * adding a second step later is one more line in the sequential() block.
- *
- * <p>Pedro's coordinate frame: +x is to the right of the field and heading 0
- * faces +x. Starting at (0, 0, 0) and ending at (24, 0, 0) is therefore
- * "24 inches in whatever direction the robot is pointing at start".
  *
  * <p>NOTE ON HEADING: this uses {@code .constant()}, not the {@code .linear()}
  * the Pedro docs show. This path does not change heading at all, so constant
@@ -38,32 +35,32 @@ public class DriveForward24OpMode extends CorbelsAuto {
     double robotHalfLengthIn = 9.0;
     double fieldPerimeterWidthIn = 1.5;
     double botStartYIn = robotHalfLengthIn + fieldPerimeterWidthIn;
-    private final Pose start = POSES.of(72, botStartYIn, 90);
-    private final Pose end = POSES.of(72, botStartYIn+DISTANCE_IN, 90);
+    private final Pose start = POSES.of(60, botStartYIn, -90);
+    private final Pose end = POSES.of(60, botStartYIn+DISTANCE_IN, -90);
 
     @Override
     public void init() {
         initBefore();
         initAfter(new CorbelsMecanum(hardware));
-    }
-
-    @Override
-    public Pose startPose() {
-        return start;
+        AutoRoutine forward = routine();
+        select(forward);
     }
 
     @Override
     public void start() {
         startBefore();
-        Scheduler.schedule(routine());
+        Command chosenAuto = selectedAuto.command();
+        Scheduler.schedule(chosenAuto);
         startAfter();
     }
 
-    public Command routine() {
-        return sequential(
+    public AutoRoutine routine() {
+        Command forward = sequential(
                 follow(follower, driveForward())
                 // Add more steps here; each runs after the previous finishes.
         );
+        AutoRoutine forwardRoutine = new AutoRoutine(start, forward);
+        return forwardRoutine;
     }
 
     @Override
@@ -71,7 +68,6 @@ public class DriveForward24OpMode extends CorbelsAuto {
         loopBefore();
 
         Tracker.printToDs("Mode  %s", follower.mode());
-        Tracker.printToDs("Remaining  %.1f in", DISTANCE_IN - follower.pose().x());
         Tracker.printPoseSpeedLoopToDs(follower);
 
         loopAfter();

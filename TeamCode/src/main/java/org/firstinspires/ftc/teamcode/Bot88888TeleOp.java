@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.pedropathing.api.PoseFactory;
 import com.pedropathing.ivy.Command;
 import com.pedropathing.ivy.Scheduler;
 import com.pedropathing.ivy.behaviors.InterruptedBehavior;
@@ -16,8 +15,7 @@ import org.firstinspires.ftc.teamcode.base.OptionMenu;
 import org.firstinspires.ftc.teamcode.base.Tracker;
 
 /**
- * Robot 88888's TeleOp: L140 Field Relative, as solutions-l140-alliances.2
- * solves it, since 88888 is a Pinpoint and a drivetrain with no intake,
+ * Robot 88888's TeleOp, for a Pinpoint and a drivetrain with no intake,
  * launcher or windmill. A Robot Controller name starting 88888, such as
  * 88888-RC, picks 88888's values; on a Robot Controller named otherwise, set
  * {@code Constants.thisRobot} to {@code BOT_88888} before running it.
@@ -28,7 +26,7 @@ import org.firstinspires.ftc.teamcode.base.Tracker;
  *   turns.</li>
  *   <li>Hold the left bumper to drive the robot instead: push the left stick
  *   away from you and the robot drives its front forward, whichever way it
- *   faces. L140 Field Relative has no bumper.</li>
+ *   faces.</li>
  * </ul>
  *
  * <p>Between INIT and PLAY, gamepad 1's D-pad works a menu on the Driver
@@ -57,13 +55,6 @@ public class Bot88888TeleOp extends CorbelsTeleOp {
     MenuRow startRow = new MenuRow("Start");
     OptionMenu optionMenu = new OptionMenu();
     DriverStationMenu menu = new DriverStationMenu(optionMenu);
-    /** The menu's choices when the pose was last set; none before the first pass. */
-    MenuItem allianceLastSet;
-    MenuItem startLastSet;
-
-    double robotHalfLengthIn = 9.0;
-    double fieldPerimeterWidthIn = 1.5;
-    double botStartYIn = robotHalfLengthIn + fieldPerimeterWidthIn;
 
     CorbelsMecanum drivetrain;
     Command driveFromTheSticks;
@@ -98,21 +89,11 @@ public class Bot88888TeleOp extends CorbelsTeleOp {
     @Override
     public void init_loop() {
         menu.loop(gamepad1);
-        setThePoseWhenTheMenuChanges();
-        initLoopAfter();
-    }
-
-    /** The pose set on the first pass, and again only when the alliance or start changes. */
-    void setThePoseWhenTheMenuChanges() {
-        MenuItem alliance = allianceRow.getSelected();
-        MenuItem start = startRow.getSelected();
-        boolean changed = alliance != allianceLastSet || start != startLastSet;
-        if (changed) {
+        if (menu.choiceChanged()) {
             Pose startPose = startPose();
             follower.setPose(startPose);
-            allianceLastSet = alliance;
-            startLastSet = start;
         }
+        initLoopAfter();
     }
 
     /** Where the auto ended, once an auto has run; otherwise against the wall. */
@@ -218,21 +199,11 @@ public class Bot88888TeleOp extends CorbelsTeleOp {
         return false;
     }
 
-    /** Against the wall, facing up the field, where 88888 Auto starts. */
+    /** Against the alliance's wall, facing it: the default start, where 88888 Auto starts. */
     Pose wallPose() {
-        PoseFactory poses = poses();
-        Pose wallPose = poses.of(72.0, botStartYIn, 90.0);
+        boolean isRed = allianceRow.getSelected() == red;
+        Pose wallPose = OpModeStorage.defaultStartPose(isRed);
         return wallPose;
-    }
-
-    /** The red alliance's poses as they are, or turned for the blue alliance. */
-    PoseFactory poses() {
-        PoseFactory redPoses = PoseFactory.degrees();
-        PoseFactory chosenPoses = redPoses;
-        if (allianceRow.getSelected() == blue) {
-            chosenPoses = redPoses.rotateAround(72.0, 72.0, 180.0);
-        }
-        return chosenPoses;
     }
 
     /** A value close to zero, inside the band, is zero; any other is as it is. */
